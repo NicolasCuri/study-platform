@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StudyOS | v13 Ultimate</title>
+<title>StudyOS | v14 (Gemini 2.5)</title>
 <style>
   :root { --primary: #2563eb; --secondary: #1e293b; --bg: #f8fafc; --card: #ffffff; --text: #334155; --success: #22c55e; --error: #ef4444; --font: 'Segoe UI', system-ui, sans-serif; }
   * { box-sizing: border-box; }
@@ -37,7 +37,7 @@
 <body>
 
 <header>
-  <h1>🩺 StudyOS v13</h1>
+  <h1>🩺 StudyOS v14</h1>
   <nav class="nav-tabs">
     <button class="tab-btn active" onclick="showView('library')">Library</button>
     <button class="tab-btn" onclick="showView('generator')">AI Gen</button>
@@ -60,7 +60,7 @@
 
   <div id="generator" class="view">
     <div class="card">
-      <h2>Generate Quiz (Gemini Pro)</h2>
+      <h2>Generate Quiz (Gemini 2.5 Pro)</h2>
       
       <label>Topic</label>
       <input type="text" id="ai-topic" placeholder="e.g. Sepsis, Shock, Ventilation">
@@ -83,9 +83,9 @@
   <div id="import" class="view">
     <div class="card">
       <h2>Import Quiz</h2>
-      <p>Paste raw JSON code here (from ChatGPT, Gemini, or other sources).</p>
+      <p>Paste raw JSON code here.</p>
       <label>Quiz Title</label>
-      <input type="text" id="import-title" placeholder="e.g. Imported Cardiology Quiz">
+      <input type="text" id="import-title" placeholder="e.g. Imported Quiz">
       <label>JSON Data</label>
       <textarea id="import-data" rows="10" placeholder='[{"stem": "...", "choices": ...}]' style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-family:monospace;"></textarea>
       <button class="btn" onclick="importQuiz()" style="width:100%; margin-top:20px;">Import to Library</button>
@@ -131,7 +131,6 @@
     document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    // active tab logic
     const tabIndex = ['library', 'generator', 'import', 'settings'].indexOf(id);
     if(tabIndex > -1) document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
   }
@@ -145,11 +144,11 @@
     location.reload();
   }
 
-  // --- 1. GENERATOR (Custom Count + Mode) ---
+  // --- GENERATOR (UPDATED FOR GEMINI 2.5) ---
   async function generateQuiz() {
     const topic = document.getElementById('ai-topic').value;
-    const count = document.getElementById('ai-count').value; // Number Input
-    const mode = document.getElementById('ai-diff').value;   // Mode Select
+    const count = document.getElementById('ai-count').value;
+    const mode = document.getElementById('ai-diff').value;
     
     if(!STORE.apiKey) return alert("NO API KEY: Go to Settings and paste your key.");
     if(!topic) return alert("NO TOPIC: Please enter a medical topic.");
@@ -157,9 +156,8 @@
     const loader = document.getElementById('gen-loader');
     const status = document.getElementById('gen-status');
     loader.style.display = 'block';
-    status.innerText = "Consulting Gemini Pro...";
+    status.innerText = "Consulting Gemini 2.5 Pro...";
 
-    // --- PROMPT ENGINEERING ---
     let diffInstruction = "";
     if (mode === "Comprehensive") {
         diffInstruction = "Mix of difficulty: 20% Easy, 50% Moderate, 30% Hard. Good for learning new topics.";
@@ -175,7 +173,8 @@
     RETURN ONLY RAW JSON.`;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${STORE.apiKey}`, {
+      // FIX: Updated model to 'gemini-2.5-pro'
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${STORE.apiKey}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -206,7 +205,7 @@
     }
   }
 
-  // --- 2. IMPORT LOGIC (From v13) ---
+  // --- IMPORT LOGIC ---
   function importQuiz() {
     const title = document.getElementById('import-title').value || "Imported Quiz";
     const rawData = document.getElementById('import-data').value;
@@ -215,15 +214,11 @@
         const parsed = JSON.parse(rawData);
         let cleanQuestions = [];
 
-        // Check format type
         if(parsed[0].stem) {
-            // It's the "Clinical" format (stem/choices/explanations)
             cleanQuestions = parsed.filter(i => i.type && i.type.includes('mcq')).map((item, idx) => {
                 const keys = Object.keys(item.choices);
                 const values = Object.values(item.choices);
                 const correctIdx = keys.indexOf(item.correct);
-                
-                // Flatten explanations
                 let expl = "";
                 if(typeof item.explanations === 'object') {
                     expl = Object.entries(item.explanations).map(([k,v]) => `<b>${k}:</b> ${v}`).join('<br><br>');
@@ -238,10 +233,9 @@
                 };
             });
         } else if (parsed[0].q || parsed[0].question_en) {
-            // It's already close to our format
             cleanQuestions = parsed.map((item, idx) => ({
                 id: idx+1,
-                q: item.q || item.question_en, // Handle variations
+                q: item.q || item.question_en,
                 opts: item.opts || item.answers_en,
                 correct: item.correct,
                 expl: item.expl || item.explanation_en
